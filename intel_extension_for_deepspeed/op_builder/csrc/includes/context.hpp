@@ -54,7 +54,7 @@ public:
         auto device_ = c10::Device(type_);
         c10::Stream dpcpp_stream = impl.getStream(device_);
         _gen = new oneapi::mkl::rng::philox4x32x10(xpu::get_queue_from_stream(dpcpp_stream), 123);
-        if ((_onemklQ = &xpu::get_queue_from_stream(dpcpp_stream), 0) != 0) {
+        if ((_onemklQ = xpu::get_queue_from_stream(dpcpp_stream), 0) != 0) {
             auto message = std::string("Fail to create onemkl queue.");
             std::cerr << message << std::endl;
             throw std::runtime_error(message);
@@ -136,11 +136,11 @@ public:
         if (!_workspace) {
             assert(_workspace == nullptr);
             /* cudaMalloc(&_workspace, workSpaceSize); */
-            _workspace = sycl::malloc_device(workSpaceSize, *current_queue);
+            _workspace = sycl::malloc_device(workSpaceSize, current_queue);
         } else if (_workSpaceSize < workSpaceSize) {
-            sycl::free(_workspace, *current_queue);
+            sycl::free(_workspace, current_queue);
             /* cudaMalloc(&_workspace, workSpaceSize); */
-            _workspace = sycl::malloc_device(workSpaceSize, *current_queue);
+            _workspace = sycl::malloc_device(workSpaceSize, current_queue);
         }
 
         if (!_workspace) {
@@ -158,19 +158,19 @@ public:
 
     void* GetWorkSpace() { return _workspace; }
 
-    sycl::queue* GetCurrentStream()
+    sycl::queue GetCurrentStream()
     {
         // get current pytorch stream.
-        // return &xpu::dpcpp::getCurrentDPCPPStream().dpcpp_queue();
+        // return xpu::dpcpp::getCurrentDPCPPStream().dpcpp_queue();
 
         auto type_ = c10::DeviceType::XPU;
         c10::impl::VirtualGuardImpl impl(type_);
         auto device_ = c10::Device(type_);
         c10::Stream dpcpp_stream = impl.getStream(device_);
-        return &xpu::get_queue_from_stream(dpcpp_stream);
+        return xpu::get_queue_from_stream(dpcpp_stream);
     }
 
-    sycl::queue* GetNewStream()
+    sycl::queue GetNewStream()
     {
         auto type_ = c10::DeviceType::XPU;
         c10::impl::VirtualGuardImpl impl(type_);
@@ -178,10 +178,10 @@ public:
         c10::Stream dpcpp_stream = impl.getStream(device_);
         c10::Stream stream = impl.getStreamFromGlobalPool(device_, /*isHighPriority=*/false);
 
-        return &xpu::get_queue_from_stream(dpcpp_stream);
+        return xpu::get_queue_from_stream(dpcpp_stream);
     }
 
-    sycl::queue* GetOneMKLQ() { return _onemklQ; }
+    sycl::queue GetOneMKLQ() { return _onemklQ; }
 
     std::pair<uint64_t, uint64_t> IncrementOffset(uint64_t offset_inc)
     {
@@ -214,7 +214,7 @@ public:
 
 private:
     oneapi::mkl::rng::philox4x32x10* _gen;
-    sycl::queue* _onemklQ;
+    sycl::queue _onemklQ;
     void* _workspace;
     uint64_t _seed;
     uint64_t _curr_offset;
