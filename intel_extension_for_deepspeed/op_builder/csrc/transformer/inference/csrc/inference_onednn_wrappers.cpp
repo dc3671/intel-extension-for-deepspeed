@@ -2,7 +2,7 @@
 #include <torch/extension.h>
 #include <c10/core/ScalarType.h>
 
-#include "onednn_wrappers.hpp"
+#include "inference_onednn_wrappers.hpp"
 #include "inference_sycl_layers.h"
 #include "lru_cache.hpp"
 #include "dnnl_ext.hpp"
