@@ -33,7 +33,7 @@ public:
           DNNL_THROW_ERROR(dnnl_invalid_arguments,
                   "memory descriptor query is invalid");
 
-      const dnnl_memory_desc_t *cdesc = dnnl_primitive_desc_query_md(
+      const auto cdesc = dnnl_primitive_desc_query_md(
               this->get_primitive_desc(), dnnl::convert_to_c(what), idx);
       return cdesc ? reinterpret_cast<const memory::desc *>(cdesc) : nullptr;
   }
