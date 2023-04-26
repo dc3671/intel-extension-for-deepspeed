@@ -253,7 +253,9 @@ struct onednn_matmul_impl<sycl::half, bmm> {
       context ctx = handle.get_context();
       dnnl::engine engine = dnnl::sycl_interop::make_engine(dev, ctx);
       dnnl::stream stream = dnnl::sycl_interop::make_stream(engine, handle);
-  
+
+      static thread_local primitive_cache cached(cache_capacity);
+
       dnnl::memory::dims src_dims, wgt_dims, dst_dims;
   
       if constexpr (bmm) {
@@ -265,10 +267,20 @@ struct onednn_matmul_impl<sycl::half, bmm> {
           wgt_dims = {k, n};
           dst_dims = {m, n};
       }
-  
+      
       dnnl::memory::desc src_md, wgt_md, dst_md;
-  
-      if constexpr (bmm) {
+
+      // add lru_cache
+      dnnl::primitive compute;
+
+      auto key = concat(
+          dst_dims, src_dims, wgt_dims,
+          false, false, (int)dnnl::memory::data_type::f16);
+
+      auto i_compute = cached.find(key);
+
+      if (i_compute == cached.end()) {
+        if constexpr (bmm) {
           src_md = dnnl::memory::desc(
               src_dims,
               dnnl::memory::data_type::f16,
@@ -279,7 +291,7 @@ struct onednn_matmul_impl<sycl::half, bmm> {
               trans_wgt ? dnnl::memory::format_tag::acb : dnnl::memory::format_tag::abc);
           dst_md = dnnl::memory::desc(
               dst_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::abc);
-      } else {
+        } else {
           src_md = dnnl::memory::desc(
               src_dims,
               dnnl::memory::data_type::f16,
@@ -290,35 +302,48 @@ struct onednn_matmul_impl<sycl::half, bmm> {
               trans_wgt ? dnnl::memory::format_tag::ba : dnnl::memory::format_tag::ab);
           dst_md = dnnl::memory::desc(
               dst_dims, dnnl::memory::data_type::f16, dnnl::memory::format_tag::ab);
-      }
-  
-      auto src_mem = dnnl::memory(src_md, engine, (void*)src_ptr);
-      auto wgt_mem = dnnl::memory(wgt_md, engine, (void*)wgt_ptr);
-      auto dst_mem = dnnl::memory(dst_md, engine, (void*)dst_ptr);
-  
-      dnnl::primitive_attr attr;
-      std::unordered_map<int, dnnl::memory> matmul_args;
-      if (alpha != 1.0f) {
-          float alpha_v(alpha);
+        } 
+
+        dnnl::primitive_attr attr;
+        if (alpha != 1.0f) {
           attr.set_scales_mask(DNNL_ARG_DST, /* mask */ 0);
-          dnnl::memory alpha_mem({{1}, dnnl::memory::data_type::f32, {1}}, engine, &alpha_v);
-          matmul_args.insert({DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_mem});
-      }
-      if (beta != 0.0f) {
+        }
+        if (beta != 0.0f) {
           dnnl::post_ops po;
           po.append_sum(beta);
           attr.set_post_ops(po);
+        }
+        
+
+        /* dnnl::matmul::desc matmul_d(src_md, wgt_md, dst_md); */
+        /* matmul_d.data.prop_kind = dnnl_prop_kind_t::dnnl_forward_inference; */
+        /* matmul::primitive_desc matmul_pd(matmul_d, attr, engine); */
+        auto matmul_pd = dnnl::matmul::primitive_desc(engine, src_md, wgt_md, dst_md, attr);
+        compute = dnnl::matmul(matmul_pd);
+
+        cached.insert(std::make_pair(key, compute));
+      } else {
+        compute = i_compute->second;
       }
+
+      // add lru_cache end 
   
-      auto matmul_pd = dnnl::matmul::primitive_desc(engine, src_md, wgt_md, dst_md, attr);
+      dnnl::primitive_ext ext_compute(compute);
+      auto src_mem = dnnl::memory(*ext_compute.src_desc(), engine, (void*)src_ptr);
+      auto wgt_mem = dnnl::memory(*ext_compute.weights_desc(), engine, (void*)wgt_ptr);
+      auto dst_mem = dnnl::memory(*ext_compute.dst_desc(), engine, (void*)dst_ptr);
   
-      auto matmul_prim = dnnl::matmul(matmul_pd);
-  
+      std::unordered_map<int, dnnl::memory> matmul_args;
+      if (alpha != 1.0f) {
+        float alpha_v(alpha);
+        dnnl::memory alpha_mem({{1}, dnnl::memory::data_type::f32, {1}}, engine, &alpha_v);
+        matmul_args.insert({DNNL_ARG_ATTR_SCALES | DNNL_ARG_WEIGHTS, alpha_mem});
+      }
       matmul_args.insert({DNNL_ARG_SRC, src_mem});
       matmul_args.insert({DNNL_ARG_WEIGHTS, wgt_mem});
       matmul_args.insert({DNNL_ARG_DST, dst_mem});
   
-      matmul_prim.execute(stream, matmul_args);
+      compute.execute(stream, matmul_args);
       /* stream.wait(); */
   }
 };
