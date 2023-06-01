@@ -11,8 +11,6 @@ class InferenceBuilder(SYCLOpBuilder):
         self.cuda_source_path = 'csrc/transformer/inference/csrc'
         self.cuda_include_path = ['csrc/transformer/inference/includes', 'csrc/includes']
 
-        import pdb
-        pdb.set_trace()
         self.sycl_sources, self.sycl_include_paths =  self.sycl_extension(self.cuda_source_path, self.cuda_include_path)
 
     def absolute_name(self):

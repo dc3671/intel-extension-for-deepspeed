@@ -5,6 +5,7 @@ import os
 import time
 import importlib
 import shutil
+import subprocess
 from pathlib import Path
 from deepspeed.ops.op_builder.builder import OpBuilder, TORCH_MAJOR, TORCH_MINOR
 
@@ -55,19 +56,29 @@ class SYCLOpBuilder(OpBuilder):
         # code_path should be relative path
         cuda_kernel_path = os.path.join(ds_root_path, code_path)
 
-        sources = ""
-        sycl_sources = []
-        for source in os.scandir(cuda_kernel_path):
-            if '.cu' in source.name or '.cpp' in source.name:
-                sources += f' {os.path.join(cuda_kernel_path, source.name)}'
-                sycl_kernel_name = source.name.replace('.cu', '.dp.cpp')
-                sycl_sources.append(os.path.join(sycl_link_path, code_path, sycl_kernel_name))
-
         out_root = " --out-root=" + f'{sycl_link_path}'
         in_root = " --in-root=" + f'{ds_root_path}'
 
-        trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + sources
-        print(trans_cmd)
+        sources = ""
+        sycl_sources = []
+        processes_running = []
+        for source in os.scandir(cuda_kernel_path):
+            if '.cu' in source.name or '.cpp' in source.name:
+                # sources += f' {os.path.join(cuda_kernel_path, source.name)}'
+                cuda_source = f' {os.path.join(cuda_kernel_path, source.name)}'
+                sycl_kernel_name = source.name.replace('.cu', '.dp.cpp')
+                sycl_kernel_abs_path = os.path.join(sycl_link_path, code_path, sycl_kernel_name)
+                sycl_sources.append(os.path.join(sycl_link_path, code_path, sycl_kernel_name))
+                trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + cuda_source
+                print("**** processing ", f'{trans_cmd}')
+                p = subprocess.Popen(f'{trans_cmd}', stdout=subprocess.PIPE, shell=True)
+                processes_running.append(p)
+
+        # trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + sources
+        exit_codes = [p.wait() for p in processes_running]
+        import pdb
+        pdb.set_trace()
+        # print(trans_cmd)
         return sycl_sources, sycl_include_paths
 
     def version_dependent_macros(self):
