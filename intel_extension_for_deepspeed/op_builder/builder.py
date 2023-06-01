@@ -26,6 +26,50 @@ class SYCLOpBuilder(OpBuilder):
             extra_link_args=self.strip_empty_entries(self.extra_ldflags()) + self.fixed_aotflags())
         return dpcpp_ext
 
+    def is_sycl_src(self):
+        if os.environ.get('USE_SYCL'):
+            return True
+        else:
+            return False
+
+    def sycl_extension(self, code_path, include_paths):
+        c2s_cmd = 'c2s'
+
+        cuda_inc_path = os.environ.get('CUDA_INC_PATH')
+        cuda_inc_flag = " --cuda-include-path=" + f'{cuda_inc_path}'
+
+        # get input and output folder
+        from .fused_adam import FusedAdamBuilder
+        ds_root_path =os.path.dirname(FusedAdamBuilder().deepspeed_src_path("../../"))
+        sycl_ds_kernel_path = "third-party"
+        sycl_link_path = os.path.join(ds_root_path, sycl_ds_kernel_path)
+
+        extra_args = ""
+        sycl_include_paths = []
+        for include_path in include_paths:
+            ds_inc_path = os.path.join(ds_root_path, include_path)
+            sycl_inc_path = os.path.join(sycl_link_path, include_path)
+            sycl_include_paths.append(sycl_inc_path)
+            extra_args += " --extra-arg=" + "\"" +  "-I " + f'{ds_inc_path}' + "\""
+
+        # code_path should be relative path
+        cuda_kernel_path = os.path.join(ds_root_path, code_path)
+
+        sources = ""
+        sycl_sources = []
+        for source in os.scandir(cuda_kernel_path):
+            if '.cu' in source.name or '.cpp' in source.name:
+                sources += f' {os.path.join(cuda_kernel_path, source.name)}'
+                sycl_kernel_name = source.name.replace('.cu', '.dp.cpp')
+                sycl_sources.append(os.path.join(sycl_link_path, code_path, sycl_kernel_name))
+
+        out_root = " --out-root=" + f'{sycl_link_path}'
+        in_root = " --in-root=" + f'{ds_root_path}'
+
+        trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + sources
+        print(trans_cmd)
+        return sycl_sources, sycl_include_paths
+
     def version_dependent_macros(self):
         # Fix from apex that might be relevant for us as well, related to https://github.com/NVIDIA/apex/issues/456
         version_ge_1_1 = []

@@ -8,6 +8,12 @@ class InferenceBuilder(SYCLOpBuilder):
     def __init__(self, name=None):
         name = self.NAME if name is None else name
         super().__init__(name=name)
+        self.cuda_source_path = 'csrc/transformer/inference/csrc'
+        self.cuda_include_path = ['csrc/transformer/inference/includes', 'csrc/includes']
+
+        import pdb
+        pdb.set_trace()
+        self.sycl_sources, self.sycl_include_paths =  self.sycl_extension(self.cuda_source_path, self.cuda_include_path)
 
     def absolute_name(self):
         return f'deepspeed.ops.transformer.inference.{self.NAME}_op'
@@ -21,20 +27,11 @@ class InferenceBuilder(SYCLOpBuilder):
     #     return None
 
     def sources(self):
-        return [
-            sycl_kernel_path('csrc/transformer/inference/csrc/softmax.cpp'),
-            sycl_kernel_path('csrc/transformer/inference/csrc/pt_binding.cpp'),
-            sycl_kernel_path('csrc/transformer/inference/csrc/gelu.cpp'),
-            sycl_kernel_path('csrc/transformer/inference/csrc/inference_onednn_wrappers.cpp'),
-            sycl_kernel_path('csrc/transformer/inference/csrc/inference_onemkl_wrappers.cpp'),
-            sycl_kernel_path('csrc/transformer/inference/csrc/layer_norm.cpp'),
-        ]
+        return self.sycl_sources
 
     def extra_ldflags(self):
         return []
 
     def include_paths(self):
-        # includes = [sycl_kernel_include('csrc/includes'), 'csrc/includes']
-        includes = [sycl_kernel_include('csrc/transformer/inference/includes'), 'csrc/transformer/inference/includes']
-        return includes
+        return self.sycl_include_paths
 
