@@ -42,6 +42,7 @@ class SYCLOpBuilder(OpBuilder):
         # get input and output folder
         from .fused_adam import FusedAdamBuilder
         ds_root_path =os.path.dirname(FusedAdamBuilder().deepspeed_src_path("../../"))
+        ds_root_path = os.path.abspath(ds_root_path)
         sycl_ds_kernel_path = "third-party"
         sycl_link_path = os.path.join(ds_root_path, sycl_ds_kernel_path)
 
@@ -66,9 +67,14 @@ class SYCLOpBuilder(OpBuilder):
             if '.cu' in source.name or '.cpp' in source.name:
                 # sources += f' {os.path.join(cuda_kernel_path, source.name)}'
                 cuda_source = f' {os.path.join(cuda_kernel_path, source.name)}'
-                sycl_kernel_name = source.name.replace('.cu', '.dp.cpp')
+                sycl_kernel_name = source.name.replace('.cu', '.sycl.cpp')
                 sycl_kernel_abs_path = os.path.join(sycl_link_path, code_path, sycl_kernel_name)
                 sycl_sources.append(os.path.join(sycl_link_path, code_path, sycl_kernel_name))
+                # import pdb
+                # pdb.set_trace()
+                if (os.path.exists(sycl_sources[-1])):
+                    print(f'skip migrate {sycl_sources[-1]}, we already have one.')
+                    continue
                 trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + cuda_source
                 print("**** processing ", f'{trans_cmd}')
                 p = subprocess.Popen(f'{trans_cmd}', stdout=subprocess.PIPE, shell=True)
@@ -76,8 +82,6 @@ class SYCLOpBuilder(OpBuilder):
 
         # trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + sources
         exit_codes = [p.wait() for p in processes_running]
-        import pdb
-        pdb.set_trace()
         # print(trans_cmd)
         return sycl_sources, sycl_include_paths
 
