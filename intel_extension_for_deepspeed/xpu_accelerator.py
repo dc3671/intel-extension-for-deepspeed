@@ -150,6 +150,9 @@ class XPU_Accelerator(DeepSpeedAccelerator):
     def is_fp16_supported(self):
         return True
 
+    def supported_dtypes(self):
+        return [torch.float, torch.bfloat16]
+
     # Tensor operations
 
     @property
@@ -193,7 +196,7 @@ class XPU_Accelerator(DeepSpeedAccelerator):
         else:
             return False
 
-    # create an instance of op builder and return, name specified by class_name 
+    # create an instance of op builder and return, name specified by class_name
     def create_op_builder(self, op_name):
         builder_class = self.get_op_builder(op_name)
         if builder_class != None:

@@ -82,7 +82,7 @@ class SYCLOpBuilder(OpBuilder):
 
         # trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + sources
         exit_codes = [p.wait() for p in processes_running]
-        # print(trans_cmd)
+        print("----------------------------- c2s job done! -----------------------------")
         return sycl_sources, sycl_include_paths
 
     def version_dependent_macros(self):
