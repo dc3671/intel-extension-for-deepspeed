@@ -32,3 +32,6 @@ find ./third-party/ -type f -exec sed -i "s/const size_t mlp_1_out_neurons/const
 
 # fix attn_softmax_v2 lacking of iterations
 find ./third-party/ -type f -exec sed -i "s/attn_softmax_v2<T>/attn_softmax_v2<T, iterations>/g" {} +
+
+# fix device at::kCUDA to at::kXPU
+find ./third-party/ -type f -exec sed -i "s/at::kCUDA/at::kXPU/g" {} +
