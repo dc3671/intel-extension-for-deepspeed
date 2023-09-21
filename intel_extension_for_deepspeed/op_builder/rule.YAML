@@ -1,0 +1,6 @@
+- Rule: new_cublasSetStream_migration
+  Kind: API
+  Priority: Takeover
+  In: cublasSetStream_v2
+  Out: $deref($1) = $deref($2)
+  Includes: []

@@ -9,6 +9,8 @@ import subprocess
 from pathlib import Path
 from deepspeed.ops.op_builder.builder import OpBuilder, TORCH_MAJOR, TORCH_MINOR
 
+c2s_run = None
+
 class SYCLOpBuilder(OpBuilder):
     def builder(self):
         try:
@@ -46,7 +48,7 @@ class SYCLOpBuilder(OpBuilder):
         sycl_ds_kernel_path = "third-party"
         sycl_link_path = os.path.join(ds_root_path, sycl_ds_kernel_path)
 
-        extra_args = ""
+        extra_args = " --use-experimental-features=local-memory-kernel-scope-allocation "
         sycl_include_paths = []
         for include_path in include_paths:
             ds_inc_path = os.path.join(ds_root_path, include_path)
@@ -60,9 +62,30 @@ class SYCLOpBuilder(OpBuilder):
         out_root = " --out-root=" + f'{sycl_link_path}'
         in_root = " --in-root=" + f'{ds_root_path}'
 
+        # check if there is rule.YAML
+        idex_path = Path(__file__).parent.absolute()
+        rule_file = os.path.join(idex_path, 'rule.YAML')
+        print("************************************* rule_file : ", f'{rule_file}')
+        if os.path.exists(rule_file):
+            extra_args += " --rule-file " + f'{rule_file}'
+
         sources = ""
         sycl_sources = []
         processes_running = []
+
+        # add pre_process and post_process cmd scripts
+        pre_process_script = os.path.join(idex_path, 'pre_process.sh')
+        post_process_script = os.path.join(idex_path, 'post_process.sh')
+        print('*'*30, 'pre_process_script: ', pre_process_script)
+        print('*'*30, 'post_process_script: ', post_process_script)
+
+        global c2s_run
+        if c2s_run is None:
+            c2s_run = True
+        if os.path.exists(pre_process_script) and c2s_run:
+            p = subprocess.Popen('source ' + f'{pre_process_script}', stdout=subprocess.PIPE, shell=True)
+            p.wait()
+
         for source in os.scandir(cuda_kernel_path):
             if '.cu' in source.name or '.cpp' in source.name:
                 # sources += f' {os.path.join(cuda_kernel_path, source.name)}'
@@ -82,6 +105,12 @@ class SYCLOpBuilder(OpBuilder):
 
         # trans_cmd = c2s_cmd + cuda_inc_flag + extra_args + in_root + out_root + sources
         exit_codes = [p.wait() for p in processes_running]
+
+        if os.path.exists(post_process_script) and c2s_run:
+            p = subprocess.Popen('source ' + f'{post_process_script}', stdout=subprocess.PIPE, shell=True)
+            p.wait()
+            c2s_run = False
+
         print("----------------------------- c2s job done! -----------------------------")
         return sycl_sources, sycl_include_paths
 
